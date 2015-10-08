@@ -11,11 +11,11 @@
 
 
 
-FROM ubuntu:14.04
+FROM ubuntu:15.10
 MAINTAINER Ton Schoots <tschoots@blackducksoftware.com>
 
 RUN apt-get update \
-    && apt-get install -y wget dbus libxtst6 git curl \
+    && apt-get install -y wget dbus libxtst6 git curl vim \
     && dbus-uuidgen > /var/lib/dbus/machine-id \
     && git config --global user.email "ton@maiastra.com" \
     && git config --global user.name "Ton Schoots"
@@ -62,13 +62,24 @@ ENV GOLANG_VERSION 1.5.1
 ENV GOLANG_DOWNLOAD_URL https://golang.org/dl/go$GOLANG_VERSION.linux-amd64.tar.gz
 ENV GOLANG_DOWNLOAD_SHA1 46eecd290d8803887dec718c691cc243f2175fe0
 
-RUN curl -fsSL "$GOLANG_DOWNLOAD_URL" -o golang.tar.gz \
+RUN mkdir -p /root/go_bootstrap && cd /root/go_bootstrap \
+     && curl -fsSL "$GOLANG_DOWNLOAD_URL" -o golang.tar.gz \
      && echo "$GOLANG_DOWNLOAD_SHA1 golang.tar.gz" | sha1sum -c - \
-     && tar -C /usr/local -xzf golang.tar.gz \
+     && tar  -xzf golang.tar.gz \
      && rm golang.tar.gz
 
-ENV GOPATH /root/go
-ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+ENV GOROOT_BOOTSTRAP /root/go_bootstrap/go
+
+RUN mkdir -p /root/go_work && cd /root && git clone https://go.googlesource.com/go \
+      && cd go \
+#      && git checkout go1.5.1 \
+      && cd src \
+      && ./make.bash 
+
+ENV GOROOT /root/go
+ENV GOPATH /root/go_work
+#ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+ENV PATH $GOROOT/bin:$GOPATH/bin:$PATH
 
 RUN echo "export GOPATH=$GOPATH" >> /root/.profile \
     && echo "export PATH=$PATH" >> /root/.profile
@@ -77,10 +88,15 @@ RUN mkdir -p $GOPATH/src/github.com/tschoots \
      && cd $GOPATH/src/github.com/tschoots \
      && git clone https://github.com/tschoots/scanner.git
 
-RUN cd /root/go \
+RUN cd $GOPATH \
     && go get -u github.com/nsf/gocode \
     && go get -v ./... \
     && go get -u golang.org/x/tools/cmd/oracle 
+
+#install mercurial
+RUN echo "deb http://cz.archive.ubuntu.com/ubuntu wily main universe" >> /etc/apt/sources.list \
+    && apt-get update -y \
+    && apt-get install -y dialog mercurial
 
 RUN apt-get update && apt-get install -y openssh-server firefox
 RUN mkdir /var/run/sshd
